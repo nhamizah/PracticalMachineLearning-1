@@ -1,0 +1,164 @@
+---
+title: 'Course Project: Practical Machine Learning'
+author: "nh"
+date: "Monday, November 16, 2015"
+output: html_document
+---
+```{r, echo=FALSE, cache=TRUE }
+
+
+```
+
+## **Executive Summary**:
+In their study, "Qualitative Activity Recognition of Weight Lifting Exercises", Velloso, E.; Bulling, A.; Gellersen, H., et al, collected bio-electronic sensor data on 6 subjects, using 5 pre-defined wieght-lifting exercises. Class A corresponds to the specified execution of the exercise, while the other 4 classes (B,C,D, and E) correspond to common mistakes. The dataset from these exercises has been made available to the general public. From it, we constructed a predictive model, based on PCA pre-processing and 10-fold KNN cross validation, to predict the class of exercise activity. 
+
+## Exploratory Analysis
+
+<ul>
+<li>Discarding Items with Near Zero Variance</li>
+    Columns with a highly repetitive or non-varying data values can cause a model to become unreliable, expecially during the validation phase. We removed 35 such values.
+<pre>
+> dim(pmlTrainingData)
+[1] 19622   159
+> dim(pmlTrainingData2)
+[1] 19622   124
+> 159-124
+</pre>
+    
+<li>Remove columns with excessive number of NA values</li>
+Several predictor columns primarily contained NA values (> 95% missing).  The large number of missing values would have made any attempt at imputing missing values from the sparse existing values, highly erroneous.
+
+We removed 69 columns that were primarily NA values
+<pre>
+> dim(pmlTrainingData3)
+[1] 19622    55
+> dim(pmlTrainingData2)
+[1] 19622   124
+</pre?
+<li>Explore linear combinations with other predictors</li> 
+    Predictors that can be composed of linear combinations of other predictors add more variation to the model.  Fortunately, in this dataset no linear combinations of predictors were discovered.
+
+     </pre>    
+<li> Remove highly correlated descriptors </li>
+
+    <pre>
+    highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
+    pmlTrainingData4 <- pmlTrainingData3[,-highlyCorDescr]
+    </pre>
+<
+</ul>
+
+## Training the Model 
+--  Pre-processing with PCA (principal component analysis) 
+
+Principal component analysis (PCA) was used to transform the data to a smaller sub-space where the new variable are uncorrelated with one another. The predictors are scaled to their mean and normalized by their standard deviation in the computation.
+
+--  Cross-Validation with KNN (Nearest Neighbor)
+The k-fold cross validation method involves splitting the dataset into k-subsets. For each subset is held out while the model is trained on all other subsets. This process is completed until accuracy is determined for each instance in the dataset; an overall accuracy estimate is provided.
+
+We used 10-fold cross-validation with the model.
+
+## Reproducibility
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r, echo=TRUE, cache=TRUE}
+
+library(caret);
+library(ggplot2);
+
+
+naValues <- c("NA", "#DIV/0!")
+
+# PART 1 (Data Input):read csv file
+pmlTrainingData = read.csv("pml-training.csv", header=TRUE, na.strings=naValues, stringsAsFactors=FALSE, row.names=1)  
+
+# PART 2 ( Basic Preprocessing of Data)
+#Detect columns with near zero variance, as candidates to discard from training model
+nsv <- nearZeroVar(pmlTrainingData,saveMetrics=TRUE)
+
+pmlTrainingData2  <-   pmlTrainingData[, which(nsv$nzv==FALSE)]
+
+
+# Remove columns with excessive number of NA values
+
+pmlTrainingData3  <- pmlTrainingData2[, -which(colnames(pmlTrainingData2)=="classe")]
+pmlTrainingData3  <- pmlTrainingData3[, -which(colnames(pmlTrainingData3)=="user_name")]
+pmlTrainingData3  <- pmlTrainingData3[, -which(colnames(pmlTrainingData3)=="cvtd_timestamp")]
+pmlTrainingData3  <- pmlTrainingData3[, -which(colSums(is.na(pmlTrainingData3))/nrow(pmlTrainingData3) > 0)]
+
+# Find if some columns are linear combinations of other columns within data
+
+comboInfo <- findLinearCombos(pmlTrainingData3)
+# $linearCombos
+# list()
+# 
+# $remove
+# NULL
+
+# We find that the pmlTrainingData3 object does not contain columns that are linear combinations of other columns
+
+
+# Remove highly correlated descriptors with a threshhold above 0.75
+
+descrCor <- cor(pmlTrainingData3)
+summary(descrCor[upper.tri(descrCor)])
+
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
+
+pmlTrainingData4 <- pmlTrainingData3[,-highlyCorDescr]
+
+#PART 4:  Train model with PCA pre-processing and a k-nearest neighbor regression model
+# USE PCA (Principal Component Analysis) to reduce number of covariates
+
+# define training control ; use k-fold cross validation with 10 data slices
+pmlTrainingData5 <- cbind(pmlTrainingData4,pmlTrainingData$classe)
+names(pmlTrainingData5)[names(pmlTrainingData5) == 'pmlTrainingData$classe'] <- 'classe'
+
+train_control <- trainControl(method="cv", number=10)
+
+modelFit <- train(classe ~., data=pmlTrainingData5, method = "knn", preProcess=c("pca"), 
+                 trControl = trainControl(method = "cv", number=10))
+
+# make predictions from the training data
+predictions <- predict(modelFit, pmlTrainingData)
+
+
+## Part 5. Now use the Training Prediction Model, modelFit, on the TEST set
+
+
+pmlTestingData = read.csv("pml-testing.csv", header=TRUE, na.strings=naValues, stringsAsFactors=FALSE, row.names=1)  
+
+testPC <- predict(modelFit, pmlTestingData)
+
+
+```
+
+
+## Addendum
+
+
+
+
+```{r ,echo=FALSE, cache=TRUE}
+
+
+naValues <- c("NA", "#DIV/0!")
+pmlTrainingData = read.csv("pml-training.csv", header=TRUE, na.strings=naValues, stringsAsFactors=FALSE, row.names=1)  
+
+# PART 2 ( Basic Preprocessing of Data)
+#Detect columns with near zero variance, as candidates to discard from training model
+nsv <- nearZeroVar(pmlTrainingData,saveMetrics=TRUE)
+
+pmlTrainingData2  <-   pmlTrainingData[, which(nsv$nzv==FALSE)]
+
+hist(pmlTrainingData2$raw_timestamp_part_1, labels=TRUE) 
+
+
+```
+
